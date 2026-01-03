@@ -7,13 +7,15 @@ class Optimizer:
             self,
             zeta_omega_type,
             omega_type: str,
+            negative_omega: bool,
             random_state: int,
             max_iter: int,
-            tol
+            tol: float
     ):
         # hyper param
         self.zeta_omega_type = zeta_omega_type
         self.omega_type = omega_type
+        self.negative_omega = negative_omega
         self.random_state = random_state
         self.max_iter = max_iter
         self.tol = tol
@@ -69,7 +71,7 @@ class Optimizer:
             if self.omega_type == "parallel":
                 return np.sum(x[1:]) - 1
             elif self.omega_type == "match":
-                return np.sum(x[0:]) - 1
+                return np.sum(x) - 1
         
         def objective_omega(x):
             if self.omega_type == "match":
@@ -94,7 +96,10 @@ class Optimizer:
             x0 = np.concatenate([[0], np.ones(N_co) / N_co])
 
         elif self.omega_type == "match":
-            bounds = [(0, None)] * N_co
+            if self.negative_omega == True:
+                bounds = [(None, None)] * N_co
+            else:
+                bounds = [(0, None)] * N_co
             x0 = np.ones(N_co) / N_co
 
         res = minimize(

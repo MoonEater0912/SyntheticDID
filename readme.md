@@ -81,11 +81,14 @@ model = SDID(
     zeta_omega="base",   # "base" (default) or a non-negative float
     zeta_lambda=0,       # 0 (default) or a non-negative float
     omega_type="parallel", # "parallel" (default) or "match"
+    negative_omega=False. # True or False (default)
     max_iter=500,        # Maximum iterations for optimization
     tol=1e-6             # Tolerance for termination
 )
 ```
 By default, the model implement the algorithm proposed in the original paper. Set zeta_omega=0 to degrade the model to a standard DID estimator. Set omega_type="match" to degrade the model to a Synthetic Control estimator. For large datasets, consider increasing max_iter and relaxing tol. The underlying optimization is powered by scipy.optimize.minimize (SLSQP).
+
+When omega_type is set to 'match', the optimizer may fail to converge if the treatment group's characteristics lie outside the convex hull of the donor pool. In such scenarios, one might consider relaxing the non-negativity constraint to allow for negative unit weights (negative_omega = True). However, it is critical to note that this approach introduces the risk of arbitrary extrapolation, which may undermine the structural validity of the synthetic control.
 
 After calling model.fit(), you can access the ATT calculated via different methods::
 
@@ -105,9 +108,9 @@ model.plot(
 )
 ```
 
-The plots show the outputs of SDID (left) and SC (right) on a simulated dataset, both of which control for time-varying covariates.
+The plots show the outputs of SDID (left) and SC (with negative weights) (right) on california_prop99 dataset.
 
 <p align="center">
-  <img src="images/eg_sdid_cov.png" width="45%" />
-  <img src="images/eg_sc_cov.png" width="45%" />
+  <img src="images/eg_sdid.png" width="45%" />
+  <img src="images/eg_sc.png" width="45%" />
 </p>

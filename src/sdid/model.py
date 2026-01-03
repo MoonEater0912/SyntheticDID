@@ -12,13 +12,14 @@ class SyntheticDID:
             zeta_omega="base", # ["base", float]
             zeta_lambda=0,
             omega_type="parallel", # ["match", "parallel"]
+            negative_omega=False, # [True, False]
             random_state=42,
             max_iter=500,
             tol=1e-6
     ):
         # algorithm
         self._optimizer = Optimizer(
-            zeta_omega_type=zeta_omega, omega_type=omega_type, 
+            zeta_omega_type=zeta_omega, omega_type=omega_type, negative_omega=negative_omega,
             random_state=random_state,
             max_iter=max_iter, tol=tol
         )
