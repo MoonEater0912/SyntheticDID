@@ -87,9 +87,9 @@ model = SDID(
     tol=1e-6             # Tolerance for termination
 )
 ```
-By default, the model implement the algorithm proposed in the original paper. Set zeta_omega=0 to degrade the model to a standard DID estimator. Set omega_type="match" to degrade the model to a Synthetic Control estimator. For large datasets, consider increasing max_iter and relaxing tol. The underlying optimization is powered by scipy.optimize.minimize (SLSQP).
+By default, the model implement the algorithm proposed in the original paper. Set a large zeta_omega to degrade the model to a standard DID estimator. Set zeta_omega=0 to ignore the regularization penalty, making the units weights set more sparse. Set omega_type="match" to degrade the model to a Synthetic Control estimator. For large datasets, consider increasing max_iter and relaxing tol. The underlying optimization is powered by scipy.optimize.minimize (SLSQP).
 
-When omega_type is set to 'match', the optimizer may fail to converge if the treatment group's characteristics lie outside the convex hull of the donor pool. In such scenarios, one might consider relaxing the non-negativity constraint to allow for negative unit weights (negative_omega = True). However, it is critical to note that this approach introduces the risk of arbitrary extrapolation, which may undermine the structural validity of the synthetic control.
+When omega_type is set to 'match', the optimizer may fail to converge if the treatment group's characteristics lie outside the convex hull of the donor pool (where it will likely return uniform weights, i.e., degraded to a DID estimator). In such scenarios, one might consider relaxing the non-negativity constraint to allow for negative unit weights (negative_omega = True). However, it is critical to note that this approach introduces the risk of arbitrary extrapolation, which may undermine the structural validity of the synthetic control.
 
 After calling model.fit(), you can access the ATT calculated via different methods::
 
@@ -97,7 +97,7 @@ After calling model.fit(), you can access the ATT calculated via different metho
 # ATT via Weighted Two-Way Fixed Effects (The standard SDID result)
 print(model.ATT)
 
-# Standard Diff-in-Diff result
+# simple Diff-in-Diff result
 print(model.ATT_diff)
 ```
 
