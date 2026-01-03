@@ -55,7 +55,7 @@ pip install git+https://github.com/MoonEater0912/SyntheticDID.git
 
 ```python
 import pandas as pd
-from sdid.model import SyntheticDID as SDID
+from sdid import SyntheticDID as SDID
 
 # Load your panel data in pd.DataFrame
 # it should contain: unit, time, outcome, treatment indicator, and other covariates (if any)

@@ -5,6 +5,7 @@ description = "A Synthetic Difference-in-Differences package for Python"
 dependencies = [
     "pandas>=2.0.0",
     "numpy>=1.20.0",
+    "matplotlib>=3.7.0",
     "scipy>=1.7.0",
     "linearmodels>=6.0"
 ]
