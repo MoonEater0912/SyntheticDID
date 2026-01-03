@@ -50,6 +50,8 @@ class SyntheticDID:
             treated_col: str, 
             covariate_cols: Optional[List[str]] = None
     ):
+        self._is_fitted = False  # reset the flag
+
         print("check data and transform ...")
         variables = ["outcome", "unit", "time", "treated"]
         if covariate_cols:

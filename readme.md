@@ -19,6 +19,7 @@ While other implementations in Python like `pysynthdid` exist, this package has 
 
 ### Next Step
 
+* Support for sparse estimation
 * Support for inference
 * Support for event studies (estimation of dynamic effects)
 * Support for staggered adoption
