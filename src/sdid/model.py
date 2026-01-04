@@ -9,13 +9,13 @@ from sdid._optimizer import Optimizer
 class SyntheticDID:
     def __init__(
             self, 
-            zeta_omega="base", # ["base", float]
-            zeta_lambda=0,
+            zeta_omega="base", # ["base", "inf" float]
+            zeta_lambda=0,     # ["inf", float]
             omega_type="parallel", # ["match", "parallel"]
             negative_omega=False, # [True, False]
             random_state=42,
             max_iter=500,
-            tol=1e-6
+            tol=1e-5
     ):
         # algorithm
         self._optimizer = Optimizer(
@@ -193,7 +193,6 @@ class SyntheticDID:
     def lambda_(self):
         return self._lambda_
 
-
     def _check_fitted(self):
         if self._is_fitted == False:
             raise ValueError("The model is not fitted yet.")
@@ -276,6 +275,10 @@ class SyntheticDID:
         return self._att
 
 
+
+
+    # Below is what can only be run after fitting
+
     @property
     def trajectories(self):
         self._check_fitted()
@@ -298,7 +301,13 @@ class SyntheticDID:
 
         return trajectories_dt
 
-    def plot_trajectories(self, ax=None, show=True, **kwargs):
+    def plot_trajectories(
+            self, ax=None, show=True, time_weights=True,
+            xlabel = "Time",
+            ylabel = "Outcome",
+            title = "Synthetic Difference-in-Differences: Trajectories",
+            **kwargs
+        ):
         self._check_fitted()
 
         if ax is None:
@@ -316,6 +325,7 @@ class SyntheticDID:
         ax.plot(df['time'], df['control'], **c_style)
         ax.plot(df['time'], df['treated'], **t_style)
 
+
         if show:
             ax.axvline(
                 x=np.min(list(self.post_treatment_terms)), 
@@ -324,9 +334,17 @@ class SyntheticDID:
                 label='Treatment Start',
                 alpha=0.8
             )
-            ax.set_xlabel('Time')
-            ax.set_ylabel('Outcome')
-            ax.set_title('Synthetic Difference-in-Differences: Trajectories')
+
+            if time_weights:
+                ax_weight = ax.twinx()
+                pre_treatment_periods = [t for t in self.wide_data.index if t not in self.post_treatment_terms]
+                ax_weight.bar(pre_treatment_periods, self.lambda_[1:], alpha=0.3, color='gray', label='Time Weights')
+                ax_weight.set_ylim(0, max(self.lambda_[1:]) * 8) # 乘以 4 是为了让 Bar 只占到底部的 1/4 高度
+                ax_weight.set_ylabel('Time Weights ($\lambda$)')
+
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+            ax.set_title(title)
             ax.legend()
             ax.grid(True, alpha=0.3)
             plt.show()

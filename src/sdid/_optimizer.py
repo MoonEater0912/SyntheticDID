@@ -23,7 +23,7 @@ class Optimizer:
         # check hyper param
 
         if not(
-            self.zeta_omega_type in ["base"] or
+            self.zeta_omega_type in ["base", "inf"] or
             isinstance(self.zeta_omega_type, (int, float, complex))
         ):
             raise ValueError("Zeta type (scaling of regularization) not supported!")
@@ -53,6 +53,9 @@ class Optimizer:
         elif isinstance(self.zeta_omega_type, (int, float, complex)):
             return self.zeta_omega_type
         
+        elif self.zeta_omega_type == "inf":
+            return "inf"
+
     def est_omega(
             self,
             wide_data,
@@ -65,6 +68,11 @@ class Optimizer:
         N_co = wide_data.shape[1] - N_tr
         T_pre = wide_data_pre.shape[0]
         T_post = len(post_treatment_terms)
+
+        if zeta == "inf" and self.omega_type == "parallel":
+            return np.concatenate([[0], np.ones(N_co)/N_co])
+        elif zeta == "inf" and self.omega_type == "match":
+            return np.ones(N_co)/N_co
 
         # define tool functions (objective, constraints)
         def constraint_omega(x):
@@ -130,13 +138,16 @@ class Optimizer:
         N_co = wide_data_co.shape[0]
         T_post = len(post_treatment_terms)
         T_pre = wide_data.shape[1] - T_post
+
+        if zeta == "inf":
+            return np.concatenate([[0], np.ones(T_pre)/T_pre])
         
         # define tool functions
         def constraints_lambda(x):
             return np.sum(x[1:]) - 1
 
         def objective_lambda(x):
-            lambda_0, lambda_pre, lambda_post = x[0], x[1:], np.ones(T_post) / T_post
+            lambda_0, lambda_pre, lambda_post = x[0], x[1:], np.ones(T_post) / (-T_post)
             lambda_full = np.concatenate([lambda_pre, lambda_post])
 
             # calculate loss

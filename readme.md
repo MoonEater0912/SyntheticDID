@@ -79,15 +79,15 @@ Actually, you can set hyperparameters for optimization process (computing $\zeta
 
 ```python
 model = SDID(
-    zeta_omega="base",   # "base" (default) or a non-negative float
-    zeta_lambda=0,       # 0 (default) or a non-negative float
+    zeta_omega="base",   # "base" (default), "inf" or a non-negative float
+    zeta_lambda=0,       # 0 (default) or a non-negative float, or "inf"
     omega_type="parallel", # "parallel" (default) or "match"
     negative_omega=False. # True or False (default)
     max_iter=500,        # Maximum iterations for optimization
-    tol=1e-6             # Tolerance for termination
+    tol=1e-5             # Tolerance for termination
 )
 ```
-By default, the model implement the algorithm proposed in the original paper. Set a large zeta_omega to degrade the model to a standard DID estimator. Set zeta_omega=0 to ignore the regularization penalty, making the units weights set more sparse. Set omega_type="match" to degrade the model to a Synthetic Control estimator. For large datasets, consider increasing max_iter and relaxing tol. The underlying optimization is powered by scipy.optimize.minimize (SLSQP).
+By default, the model implement the algorithm proposed in the original paper (automatically calculating zeta_omega based on an empirical formula). Set zeta_omega = "inf" and zeta_lambda = "inf" to degrade the model to a standard DID estimator ("inf" means the regularization penalty dominates the optimization, forcing the weights to be uniform). Set zeta_omega=0 to ignore the regularization penalty, making the units weights more sparse. Set omega_type="match" to degrade the model to a Synthetic Control estimator (getting rid of the intercept, i.e., $\omega_0$). For falied optimazation, consider increasing max_iter and relaxing tol. The underlying optimization is powered by scipy.optimize.minimize (SLSQP).
 
 When omega_type is set to 'match', the optimizer may fail to converge if the treatment group's characteristics lie outside the convex hull of the donor pool (where it will likely return uniform weights, i.e., degraded to a DID estimator). In such scenarios, one might consider relaxing the non-negativity constraint to allow for negative unit weights (negative_omega = True). However, it is critical to note that this approach introduces the risk of arbitrary extrapolation, which may undermine the structural validity of the synthetic control.
 
@@ -97,15 +97,21 @@ After calling model.fit(), you can access the ATT calculated via different metho
 # ATT via Weighted Two-Way Fixed Effects (The standard SDID result)
 print(model.ATT)
 
-# simple Diff-in-Diff result
+# simple weighted Diff-in-Diff result
 print(model.ATT_diff)
 ```
 
-You can easily plot the outcome trajectories for treated and synthetic control groups:
+Note: if you have adjusted the outcome variables via "covariates" parameter in model.fit(), then there should be no need to use two-way fixed effects model to estimate ATT, as the fixed effects are already controlled for when the model is adjusting the outcome.
+
+You can easily plot the outcome trajectories for treated and synthetic control groups. You can set line features for the control group and the treatment group separately via parameters starting with "co_" or "tr_", like "co_color='red'", "tr_label='treated states'", etc.
 
 ```python
 model.plot(
-    ax=None, show=True
+    ax=None, show=True, time_weights=True,
+    xlabel = "Time",
+    ylabel = "Outcome",
+    title = "Synthetic Difference-in-Differences: Trajectories",
+    **kwargs
 )
 ```
 
