@@ -10,7 +10,8 @@ class Optimizer:
             negative_omega: bool,
             random_state: int,
             max_iter: int,
-            tol: float
+            tol: float,
+            sparse_threshold: float
     ):
         # hyper param
         self.zeta_omega_type = zeta_omega_type
@@ -19,6 +20,7 @@ class Optimizer:
         self.random_state = random_state
         self.max_iter = max_iter
         self.tol = tol
+        self.sparse_threshold = sparse_threshold
 
         # check hyper param
 
@@ -123,6 +125,17 @@ class Optimizer:
         if not res.success:
             raise ValueError(f"Optimization of Omega (weights of units) failed: {res.message}")
         
+        if self.sparse_threshold > 0:
+            k = self.sparse_threshold
+            if self.omega_type == "match": 
+                omegas = np.array([[w if w >= k/len(res.x) else 0.0 for w in res.x]])
+                omegas = omegas / omegas.sum()
+                return omegas
+            elif self.omega_type == "parallel":
+                omegas = np.array([w if w >= k/len(res.x[1:]) else 0.0 for w in res.x[1:]])
+                omegas = omegas / omegas.sum()
+                return np.concatenate([[res.x[0]], omegas])
+
         return res.x
 
     def est_lambda(

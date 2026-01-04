@@ -15,13 +15,15 @@ class SyntheticDID:
             negative_omega=False, # [True, False]
             random_state=42,
             max_iter=500,
-            tol=1e-5
+            tol=1e-5,
+            sparse_threshold: float = 0 # only controls the sparsity of omega 
     ):
         # algorithm
         self._optimizer = Optimizer(
             zeta_omega_type=zeta_omega, omega_type=omega_type, negative_omega=negative_omega,
             random_state=random_state,
-            max_iter=max_iter, tol=tol
+            max_iter=max_iter, tol=tol,
+            sparse_threshold=sparse_threshold
         )
         
         self.random_state = random_state
@@ -48,7 +50,7 @@ class SyntheticDID:
             unit_col: str,
             time_col: str,
             treated_col: str, 
-            covariate_cols: Optional[List[str]] = None
+            covariate_cols: Optional[List[str]] = None,
     ):
         self._is_fitted = False  # reset the flag
 

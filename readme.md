@@ -19,7 +19,6 @@ While other implementations in Python like `pysynthdid` exist, this package has 
 
 ### Next Step
 
-* Support for sparse estimation
 * Support for inference
 * Support for event studies (estimation of dynamic effects)
 * Support for staggered adoption
@@ -79,17 +78,20 @@ Actually, you can set hyperparameters for optimization process (computing $\zeta
 
 ```python
 model = SDID(
-    zeta_omega="base",   # "base" (default), "inf" or a non-negative float
-    zeta_lambda=0,       # 0 (default) or a non-negative float, or "inf"
-    omega_type="parallel", # "parallel" (default) or "match"
-    negative_omega=False. # True or False (default)
-    max_iter=500,        # Maximum iterations for optimization
-    tol=1e-5             # Tolerance for termination
+    zeta_omega="base",      # "base" (default), "inf" or a non-negative float
+    zeta_lambda=0,          # 0 (default) or a non-negative float, or "inf"
+    omega_type="parallel",  # "parallel" (default) or "match"
+    negative_omega=False.   # True or False (default)
+    max_iter=500,           # Maximum iterations for optimization
+    tol=1e-5,               # Tolerance for termination
+    sparse_threshold=0      # non-negative float; if zero, it will be ignored
 )
 ```
-By default, the model implement the algorithm proposed in the original paper (automatically calculating zeta_omega based on an empirical formula). Set zeta_omega = "inf" and zeta_lambda = "inf" to degrade the model to a standard DID estimator ("inf" means the regularization penalty dominates the optimization, forcing the weights to be uniform). Set zeta_omega=0 to ignore the regularization penalty, making the units weights more sparse. Set omega_type="match" to degrade the model to a Synthetic Control estimator (getting rid of the intercept, i.e., $\omega_0$). For falied optimazation, consider increasing max_iter and relaxing tol. The underlying optimization is powered by scipy.optimize.minimize (SLSQP).
+By default, the model implement the algorithm proposed in the original paper (automatically calculating zeta_omega based on an empirical formula). Set zeta_omega = "inf" and zeta_lambda = "inf" to degrade the model to a standard DID estimator ("inf" means the regularization penalty dominates the optimization, forcing the weights to be uniform). Set zeta_omega=0 and zeta_lambda to ignore the regularization penalty, making the units weights more sparse.  For falied optimazation, consider increasing max_iter and relaxing tol. The underlying optimization is powered by scipy.optimize.minimize (SLSQP).
 
-When omega_type is set to 'match', the optimizer may fail to converge if the treatment group's characteristics lie outside the convex hull of the donor pool (where it will likely return uniform weights, i.e., degraded to a DID estimator). In such scenarios, one might consider relaxing the non-negativity constraint to allow for negative unit weights (negative_omega = True). However, it is critical to note that this approach introduces the risk of arbitrary extrapolation, which may undermine the structural validity of the synthetic control.
+Set omega_type="match" to degrade the model to a Synthetic Control estimator (getting rid of the intercept, i.e., $\omega_0$). However, when omega_type is set to 'match', the optimizer may fail to converge if the treatment group's characteristics lie outside the convex hull of the donor pool (where it will likely return uniform weights, i.e., degraded to a DID estimator). In such scenarios, one might consider relaxing the non-negativity constraint to allow for negative unit weights (negative_omega = True). However, it is critical to note that this approach introduces the risk of arbitrary extrapolation, which may undermine the structural validity of the synthetic control.
+
+To achieve sparser omega weights to improve interpretability, set sparse_threshold to a positive number (like 0.1) and zeta_omega=0. Once the weights are estimated, any value below the threshold of `1 / len(omegas)` is set to zero, and the remaining weights are re-scaled to sum to 1. Note: This approach violates the standard SDID assumptions, so use it sparingly.
 
 After calling model.fit(), you can access the ATT calculated via different methods::
 
