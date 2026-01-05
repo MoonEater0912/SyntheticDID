@@ -8,7 +8,6 @@ class Optimizer:
             zeta_omega_type,
             omega_type: str,
             negative_omega: bool,
-            random_state: int,
             max_iter: int,
             tol: float,
             sparse_threshold: float
@@ -17,7 +16,6 @@ class Optimizer:
         self.zeta_omega_type = zeta_omega_type
         self.omega_type = omega_type
         self.negative_omega = negative_omega
-        self.random_state = random_state
         self.max_iter = max_iter
         self.tol = tol
         self.sparse_threshold = sparse_threshold

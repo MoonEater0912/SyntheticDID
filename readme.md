@@ -19,7 +19,7 @@ While other implementations in Python like `pysynthdid` exist, this package has 
 
 ### Next Step
 
-* Support for inference
+* Support for inference (Bootstrap is now supported)
 * Support for event studies (estimation of dynamic effects)
 * Support for staggered adoption
 
@@ -137,3 +137,34 @@ The plots show the outputs of SDID (left) and SC (with negative weights) (right)
 
 ### Inference
 
+To inferring the confidence interval of estimated ATTs, run:
+
+```python
+model.infer(
+    method = "bootstrap", # ["bootstrap", "jackknife", "placebo"]
+    rep = 500
+)
+```
+
+Or, more simply:
+
+```python
+estimates_info = SDID().fit(dt, 'PacksPerCapita', 'State', 'Year', 'treated').infer()
+```
+
+This will return a dictionary, storing the estimate, standard error, z-score, p-value and 90% / 95% CIs, for both ATT and ATT_diff, like:
+
+```python
+{'ATT': {'estimate': np.float64(-12.593275741919133),
+  'Std.Err': np.float64(2.5950599970911923),
+  'ci_90': (np.float64(-16.861769590291257), np.float64(-8.324781893547009)),
+  'ci_95': (np.float64(-17.679499873938486), np.float64(-7.507051609899778)),
+  'z_value': np.float64(-4.852787895476389),
+  'p_value': np.float64(1.2173787153901827e-06)},
+ 'ATT_diff': {'estimate': np.float64(-15.60377621195305),
+  'Std.Err': np.float64(2.395089469728027),
+  'ci_90': (np.float64(-19.543347813108475), np.float64(-11.664204610797627)),
+  'ci_95': (np.float64(-20.29806531237112), np.float64(-10.909487111534983)),
+  'z_value': np.float64(-6.514903267361),
+  'p_value': np.float64(7.273648350292206e-11)}}
+```

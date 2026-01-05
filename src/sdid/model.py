@@ -1,11 +1,12 @@
 import pandas as pd
 import numpy as np
-from typing import List, Optional
+from typing import List, Optional, Literal
 import matplotlib.pyplot as plt
 from linearmodels.panel import PanelOLS
 
 from sdid._optimizer import Optimizer
 from sdid._plotter import Plotter
+from sdid._inferer import Inferer
 
 class SyntheticDID:
     def __init__(
@@ -25,14 +26,15 @@ class SyntheticDID:
         # optimizer
         self._optimizer = Optimizer(
             zeta_omega_type=zeta_omega, omega_type=omega_type, negative_omega=negative_omega,
-            random_state=random_state,
             max_iter=max_iter, tol=tol,
             sparse_threshold=sparse_threshold
         )
 
         # data
+        self._raw_data = None
         self._data = None
         self._wide_data = None
+        self._covariates = None
         
         # param
         self._zeta_omega = None
@@ -48,6 +50,9 @@ class SyntheticDID:
         # plotter
         self._plotter = Plotter()
 
+        # inferer
+        self._inferer = Inferer(random_state = random_state)
+
     def fit(
             self,
             data: pd.DataFrame,
@@ -57,9 +62,10 @@ class SyntheticDID:
             treated_col: str, 
             covariate_cols: Optional[List[str]] = None,
     ):
+
         self._is_fitted = False  # reset the flag
 
-        print("check data and transform ...")
+        # print("check data and transform ...")
         variables = ["outcome", "unit", "time", "treated"]
         if covariate_cols:
             variables.extend(covariate_cols)
@@ -77,12 +83,15 @@ class SyntheticDID:
         self._sort_rows()
         self._check_panel() # check if balanced, non-staggered and absorbed
 
+        self._raw_data = self._data  # raw data: without adjusting for Y
+
         if covariate_cols: # adjust for outcomes by time-varying covariates
+            self._covariates = covariate_cols
             self._adjust_outcomes()
 
         self._transform_to_wide() # make wide table, row=time, col=unit
 
-        print("optimizing ...")
+        # print("optimizing ...")
         self._zeta_omega = self._optimizer.est_zeta(
             self.wide_data, 
             self.treated_units, 
@@ -93,23 +102,26 @@ class SyntheticDID:
             self.wide_data,
             self.treated_units,
             self.post_treatment_terms,
-            self.zeta_omega
+            self._zeta_omega
         )
 
         self._lambda_ = self._optimizer.est_lambda(
             self.wide_data,
             self.treated_units,
             self.post_treatment_terms,
-            self.zeta_lambda
+            self._zeta_lambda
         )
 
-        print("estimating ...")
+        # print("estimating ...")
         self._att_diff = self._est_att_diff()
         self._make_reg_data()
         self._att = self._est_att()
 
         self._is_fitted = True
-        print("Done!")
+        # print("Done!")
+
+        return self
+        
 
     def _adjust_outcomes(self):
         df = self._data[self._data["treated"] == 0].copy()
@@ -183,36 +195,20 @@ class SyntheticDID:
     @property
     def data(self):
         return self._data
-    
+
     @property
-    def zeta_omega(self):
+    def covariates(self):
         self._check_fitted()
-        return self._zeta_omega
-    
-    @property
-    def zeta_lambda(self):
-        self._check_fitted()
-        return self._zeta_lambda
-    
-    @property
-    def omega(self):
-        self._check_fitted()
-        return self._omega
-    
-    @property
-    def lambda_(self):
-        self._check_fitted()
-        return self._lambda_
+        return self._covariates
 
     def _check_fitted(self):
         if self._is_fitted == False:
             raise ValueError("The model is not fitted yet, or the last fitting failed.")
 
-
     def _est_att_diff(self):
         T_post = len(self.post_treatment_terms)
         lambda_full = np.concatenate([
-            self.lambda_[1:],
+            self._lambda_[1:],
             np.ones(T_post)/(-T_post)
         ])
         pre_post_diff = self.wide_data.T @ lambda_full
@@ -220,12 +216,12 @@ class SyntheticDID:
         N_tr = len(self.treated_units)
         if self._optimizer.omega_type == "match":
             omega_full = np.concatenate([
-                self.omega,
+                self._omega,
                 np.ones(N_tr)/(-N_tr)
             ])
         elif self._optimizer.omega_type == "parallel":
             omega_full = np.concatenate([
-                self.omega[1:],
+                self._omega[1:],
                 np.ones(N_tr)/(-N_tr)
             ])
         return pre_post_diff @ omega_full
@@ -287,6 +283,44 @@ class SyntheticDID:
         self._check_fitted()
         return self._att
 
+
+    # ============================================================
+    # Below are functions that can be called only after fitted
+    # ============================================================
+
+    @property
+    def zeta_omega(self):
+        self._check_fitted()
+        return self._zeta_omega
+    
+    @property
+    def zeta_lambda(self):
+        self._check_fitted()
+        return self._zeta_lambda
+    
+    @property
+    def omega(self):
+        self._check_fitted()
+        return self._omega
+    
+    @property
+    def lambda_(self):
+        self._check_fitted()
+        return self._lambda_
+
+
+    @property
+    def _clone(self):
+        return SyntheticDID(
+            zeta_omega=self._optimizer.zeta_omega_type,
+            zeta_lambda=self._zeta_lambda,
+            omega_type=self._optimizer.omega_type,
+            negative_omega=self._optimizer.negative_omega,
+            max_iter=self._optimizer.max_iter,
+            tol=self._optimizer.tol,
+            sparse_threshold = self._optimizer.sparse_threshold
+        )
+
     @property
     def trajectories(self):
         self._check_fitted()
@@ -325,5 +359,38 @@ class SyntheticDID:
             **kwargs
         )
 
-        
+    
+    def infer(
+            self,
+            method: Literal["placebo", "bootstrap", "jackknife"] = "bootstrap",
+            rep:int = 500
+    ):
+        self._check_fitted()
+
+        # reproduce itself
+        clone = self._clone
+
+        # sending task
+        if method == "bootstrap":
+            return self._inferer.bootstrapping(
+                raw_data=self._raw_data,
+                ATT_twfe=self.ATT,
+                ATT_diff=self.ATT_diff,
+                covariates=self.covariates,
+                model=clone,
+                rep=rep
+            )
+        elif method == "jackknife":
+            return self._inferer.jackknifing(
+                data=self._data,
+                ATT_twfe=self.ATT,
+                ATT_diff=self.ATT_diff,
+            )
+        elif method == "placebo":
+            pass
+        else:
+            raise ValueError("The indicated method is not supported (choose from [placebo, bootstrap, jackknife]).")
+
+
+
 
