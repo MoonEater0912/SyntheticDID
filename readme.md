@@ -53,6 +53,14 @@ pip install git+https://github.com/MoonEater0912/SyntheticDID.git
 
 ## Quick Start
 
+### Model Setup
+
+To get started, your data frame should contain at least four columns: 'unit', 'time', 'outcome' and 'treated indicator'. You can specify the column names when fitting the model. The treatment should be absorbed, meaning that the treated indicator should never revert to 0 after treatment. Also, the panel should be balanced, i.e., all units have same number of observations.
+
+You can also specify covariates when fitting the model. The way the package controls for covariates is described in this [working paper](https://github.com/skranz/xsynthdid/blob/main/paper/synthdid_with_covariates.pdf).
+
+Currently, this package only supports same-time adoption.
+
 ```python
 import pandas as pd
 from sdid import SyntheticDID as SDID
@@ -61,7 +69,7 @@ from sdid import SyntheticDID as SDID
 # it should contain: unit, time, outcome, treatment indicator, and other covariates (if any)
 dt = pd.read_csv("your_data.csv")
 
-# initialize the model
+# initialize the model in default setting
 model = SDID()
 
 # fit the model with your data
@@ -93,6 +101,8 @@ Set omega_type="match" to degrade the model to a Synthetic Control estimator (ge
 
 To achieve sparser omega weights to improve interpretability, set sparse_threshold to a positive number `k` (like 0.1) and zeta_omega=0. Once the weights are estimated, any value below the threshold of `k / len(omegas)` is set to zero, and the remaining weights are re-scaled to sum to 1. Note: This approach violates the standard SDID assumptions, so use it sparingly.
 
+### Estimation of ATT
+
 After calling model.fit(), you can access the ATT calculated via different methods::
 
 ```python
@@ -103,7 +113,7 @@ print(model.ATT)
 print(model.ATT_diff)
 ```
 
-Note: if you have adjusted the outcome variables via "covariates" parameter in model.fit(), then there should be no need to use two-way fixed effects model to estimate ATT, as the fixed effects are already controlled for when the model is adjusting the outcome.
+The difference between these two ATTs is: `model.ATT` controls for the unit and the time fixed effects; whicle `model.ATT_diff` simply calculates $\frac{1}{T_{post}}\sum(\frac{1}{N_{tr}}\sum Y_{i,t} - \sum \omega_i Y_{i,t}) - \sum \lambda_t (\frac{1}{N_{tr}}\sum Y_{i,t} - \sum \omega_i Y_{i,t})$. Neither of them provides standard error or confidence interval, which should be accessed through `model.infer()`, where you can specify hyperparameters for the inference model.
 
 You can easily plot the outcome trajectories for treated and synthetic control groups. You can set line features for the control group and the treatment group separately via parameters starting with "co_" or "tr_", like "co_color='red'", "tr_label='treated states'", etc.
 
@@ -123,3 +133,7 @@ The plots show the outputs of SDID (left) and SC (with negative weights) (right)
   <img src="images/eg_sdid.png" width="45%" />
   <img src="images/eg_sc.png" width="45%" />
 </p>
+
+
+### Inference
+

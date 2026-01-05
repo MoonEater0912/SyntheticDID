@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from linearmodels.panel import PanelOLS
 
 from sdid._optimizer import Optimizer
+from sdid._plotter import Plotter
 
 class SyntheticDID:
     def __init__(
@@ -18,15 +19,16 @@ class SyntheticDID:
             tol=1e-5,
             sparse_threshold: float = 0 # only controls the sparsity of omega 
     ):
-        # algorithm
+        
+        self.random_state = random_state
+
+        # optimizer
         self._optimizer = Optimizer(
             zeta_omega_type=zeta_omega, omega_type=omega_type, negative_omega=negative_omega,
             random_state=random_state,
             max_iter=max_iter, tol=tol,
             sparse_threshold=sparse_threshold
         )
-        
-        self.random_state = random_state
 
         # data
         self._data = None
@@ -42,6 +44,9 @@ class SyntheticDID:
 
         # flag
         self._is_fitted = False
+
+        # plotter
+        self._plotter = Plotter()
 
     def fit(
             self,
@@ -181,23 +186,27 @@ class SyntheticDID:
     
     @property
     def zeta_omega(self):
+        self._check_fitted()
         return self._zeta_omega
     
     @property
     def zeta_lambda(self):
+        self._check_fitted()
         return self._zeta_lambda
     
     @property
     def omega(self):
+        self._check_fitted()
         return self._omega
     
     @property
     def lambda_(self):
+        self._check_fitted()
         return self._lambda_
 
     def _check_fitted(self):
         if self._is_fitted == False:
-            raise ValueError("The model is not fitted yet.")
+            raise ValueError("The model is not fitted yet, or the last fitting failed.")
 
 
     def _est_att_diff(self):
@@ -223,6 +232,7 @@ class SyntheticDID:
 
     @property
     def ATT_diff(self):
+        self._check_fitted()
         return self._att_diff
 
     def _make_reg_data(self):
@@ -274,12 +284,8 @@ class SyntheticDID:
     
     @property
     def ATT(self):
+        self._check_fitted()
         return self._att
-
-
-
-
-    # Below is what can only be run after fitting
 
     @property
     def trajectories(self):
@@ -310,48 +316,14 @@ class SyntheticDID:
             title = "Synthetic Difference-in-Differences: Trajectories",
             **kwargs
         ):
-        self._check_fitted()
 
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(10, 6))
-        
-        df = self.trajectories
-
-        control_kwargs = {k.replace('co_', ''): v for k, v in kwargs.items() if k.startswith('co_')}
-        treated_kwargs = {k.replace('tr_', ''): v for k, v in kwargs.items() if k.startswith('tr_')}
-        common_kwargs = {k: v for k, v in kwargs.items() if not k.startswith(('co_', 'tr_'))}
-
-        c_style = {**{'color': 'blue', 'ls': '--', 'label': 'Control'}, **common_kwargs, **control_kwargs}
-        t_style = {**{'color': 'orange', 'ls': '-', 'label': 'Treated'}, **common_kwargs, **treated_kwargs}
-
-        ax.plot(df['time'], df['control'], **c_style)
-        ax.plot(df['time'], df['treated'], **t_style)
-
-
-        if show:
-            ax.axvline(
-                x=np.min(list(self.post_treatment_terms)), 
-                color='gray', 
-                linestyle=':', 
-                label='Treatment Start',
-                alpha=0.8
-            )
-
-            if time_weights:
-                ax_weight = ax.twinx()
-                pre_treatment_periods = [t for t in self.wide_data.index if t not in self.post_treatment_terms]
-                ax_weight.bar(pre_treatment_periods, self.lambda_[1:], alpha=0.3, color='gray', label='Time Weights')
-                ax_weight.set_ylim(0, max(self.lambda_[1:]) * 8) # 乘以 4 是为了让 Bar 只占到底部的 1/4 高度
-                ax_weight.set_ylabel('Time Weights ($\lambda$)')
-
-            ax.set_xlabel(xlabel)
-            ax.set_ylabel(ylabel)
-            ax.set_title(title)
-            ax.legend()
-            ax.grid(True, alpha=0.3)
-            plt.show()
-
-        return ax
+        self._plotter.trajectories(
+            self, ax=ax, show=show, time_weights=time_weights,
+            xlabel = xlabel,
+            ylabel = ylabel,
+            title = title,
+            **kwargs
+        )
 
         
 
