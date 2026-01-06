@@ -10,7 +10,8 @@
 While other implementations in Python like `pysynthdid` exist, this package has (aims to have) several advantages:
 
 * **Time-Varying Covariates**: Support for including dynamic controls in estimation.
-* **ATT Estimation**: Uses the weighted two-way fixed-effect regression to estimate the Average Treatment Effect on the Treated (ATT), while also keeping the ATT estimated by diff-in-diff. 
+* **More Robust ATT Estimation**: Uses the weighted two-way fixed-effect regression to estimate the Average Treatment Effect on the Treated (ATT), while also keeping the ATT estimated by diff-in-diff. 
+*  **More Accurate Inference**: Fixes bugs existing in other previous implementations.
 * **Relaxed Dependencies**: Updated to be compatible with the latest Python data science stack.
 * **Other Features (under construction)**: 
     * Enhanced support for **Event Studies**.
