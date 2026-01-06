@@ -360,10 +360,36 @@ class SyntheticDID:
         )
 
     
+    def _infer2summary(self, infer_dict):
+        print("Synthetic Difference-in-Differences Estimations")
+        print("-" * 65)
+        header = f"{'Parameter':<10} | {'Estimate':>15} | {'Std. Error':>12} | {'z-score':>10} | {'p > |z|':>10}"
+        print(header)
+        print("-" * 65)
+
+        for param, metrics in infer_dict.items():
+            est = metrics['estimate']
+            stderr = metrics['Std.Err']
+            z_val = metrics['z_value']
+            p_val = metrics['p_value']
+            ci_lower, ci_upper = metrics['ci_95']
+
+            stars = ""
+            if p_val < 0.01: stars = "***"
+            elif p_val < 0.05: stars = "**"
+            elif p_val < 0.1: stars = "*"
+
+            print(f"{param:<10} | {est:>12.4f}{stars:<3} | {stderr:>12.4f} | {z_val:>10.3f} | {p_val:>10.4e}")
+            print(f"{'':<10} | [{ci_lower:>5.3f}, {ci_upper:>5.3f}] (95% CI)")
+            
+        print("-" * 65)
+        print("Significance codes:  *** p<0.01, ** p<0.05, * p<0.1")
+
     def infer(
             self,
             method: Literal["placebo", "bootstrap", "jackknife"] = "bootstrap",
-            rep:int = 500
+            rep:int = 500,
+            summary_show = True
     ):
         self._check_fitted()
 
@@ -372,7 +398,7 @@ class SyntheticDID:
 
         # sending task
         if method == "bootstrap":
-            return self._inferer.bootstrapping(
+            infer_dict = self._inferer.bootstrapping(
                 raw_data=self._raw_data,
                 ATT_twfe=self.ATT,
                 ATT_diff=self.ATT_diff,
@@ -381,15 +407,23 @@ class SyntheticDID:
                 rep=rep
             )
         elif method == "jackknife":
-            return self._inferer.jackknifing(
-                data=self._data,
+            raise ValueError("The indicated method is not supported (choose from [placebo, bootstrap]).")
+        elif method == "placebo":
+            infer_dict = self._inferer.placeboing(
+                raw_data=self._raw_data,
                 ATT_twfe=self.ATT,
                 ATT_diff=self.ATT_diff,
+                covariates=self.covariates,
+                model=clone,
+                rep=rep
             )
-        elif method == "placebo":
-            pass
         else:
-            raise ValueError("The indicated method is not supported (choose from [placebo, bootstrap, jackknife]).")
+            raise ValueError("The indicated method is not supported (choose from [placebo, bootstrap]).")
+        
+        if summary_show:
+            self._infer2summary(infer_dict=infer_dict)
+
+        return infer_dict
 
 
 
