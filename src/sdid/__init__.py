@@ -1,5 +1,9 @@
 from .model import SyntheticDID
+from importlib.metadata import version, PackageNotFoundError
 
-__version__ = "0.1.2"
+try:
+    __version__ = version("SyntheticDID")
+except PackageNotFoundError:
+    __version__ = "unknown"
 
 __all__ = ["SyntheticDID"]
