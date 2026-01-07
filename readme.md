@@ -3,7 +3,8 @@
 `SyntheticDID` is a Python implementation of the **Synthetic Difference-in-Differences (SDID)** estimator. 
 
 > [!NOTE]
-> This package is still under development.
+> This package is still under development. Issues and PR are welcomed.
+> A link to PyPI will be put here in the future.
 
 ### Introduction
 
@@ -20,7 +21,7 @@ While other implementations in Python like `pysynthdid` exist, this package has 
 
 ### Next Step
 
-* Support for inference (Bootstrap and Placebo are now supported; Jackknife is still under construction)
+* Change the optimization algorithm: The $\omega$ optimization is currently implemented using SLSQP. However, when the treated unit's trajectory differs significantly from the control units, the algorithm often gets trapped at the initial values (e.g., uniform weights). While randomized initialization is used as an ad hoc fix, it lacks robustness. Frank-Wolfe (FW) algorithm should be more resilient to such "flat" loss surfaces.
 * Support for event studies (estimation of dynamic effects)
 * Support for staggered adoption
 
@@ -98,7 +99,7 @@ model = SDID(
 ```
 By default, the model implement the algorithm proposed in the original paper (automatically calculating zeta_omega based on an empirical formula). Set zeta_omega = "inf" and zeta_lambda = "inf" to degrade the model to a standard DID estimator ("inf" means the regularization penalty dominates the optimization, forcing the weights to be uniform). Set zeta_omega=0 and zeta_lambda to ignore the regularization penalty, making the units weights more sparse.  For falied optimazation, consider increasing max_iter and relaxing tol. The underlying optimization is powered by `scipy.optimize.minimize` (SLSQP).
 
-Set omega_type="match" to degrade the model to a Synthetic Control estimator (getting rid of the intercept, i.e., $\omega_0$). However, when omega_type is set to 'match', the optimizer may fail to converge if the treatment group's characteristics lie outside the convex hull of the donor pool (where it will likely return uniform weights, i.e., degraded to a DID estimator). In such scenarios, one might consider relaxing the non-negativity constraint to allow for negative unit weights (negative_omega = True). However, it is critical to note that this approach introduces the risk of arbitrary extrapolation, which may undermine the structural validity of the synthetic control.
+Set omega_type="match" to degrade the model to a Synthetic Control estimator (getting rid of the intercept, i.e., $\omega_0$). However, when omega_type is set to 'match', the optimizer may fail to converge if the treatment group's characteristics lie outside the convex hull of the donor pool. In such scenarios, one might consider relaxing the non-negativity constraint to allow for negative unit weights (negative_omega = True). However, it is critical to note that this approach introduces the risk of arbitrary extrapolation, which may undermine the structural validity of the synthetic control.
 
 To achieve sparser omega weights to improve interpretability, set sparse_threshold to a positive number `k` (like 0.1) and zeta_omega=0. Once the weights are estimated, any value below the threshold of `k / len(omegas)` is set to zero, and the remaining weights are re-scaled to sum to 1. Note: This approach violates the standard SDID assumptions, so use it sparingly.
 
@@ -142,12 +143,16 @@ To inferring the confidence interval of estimated ATTs, run:
 
 ```python
 model.infer(
-    method = "bootstrap", # ["bootstrap", "placebo"]
-    rep = 500
+    method = "bootstrap", # ["bootstrap", "placebo", "jackknife"]
+    rep = 500,
+    summary_show = True
 )
 ```
 
-Note here if your dataset doesn't have a large number of treatment units, then you probably want to use `"placebo"`, which provides a more robust estimation in this case. `"bootstrap"` usually returns a much smaller Std.Err.
+Note that 
+* If your dataset doesn't have a large number of treatment units, then you probably want to use `"placebo"`, which provides a more robust estimation in this case. `"bootstrap"` usually returns a much smaller Std.Err.
+* If your dataset contains more treated units than control units, then `placebo` is not allowed.
+* If your dataset contains only one treated unit (e.g., in California dataset), then `jackknife` is not allowed.
 
 Or, more simply:
 
@@ -155,7 +160,7 @@ Or, more simply:
 estimates_info = SDID().fit(dt, 'PacksPerCapita', 'State', 'Year', 'treated').infer()
 ```
 
-This will return a dictionary, storing the estimate, standard error, z-score, p-value and 90% / 95% CIs, for both ATT and ATT_diff, like:
+This will return a dictionary, storing the estimate, standard error, z-score, p-value and 90% / 95% CIs, for both ATT and ATT_diff (only ATT if `method = "jackknife"`, as it re-estimates treatment effect only by TWFE), like:
 
 ```python
 {'ATT': {'estimate': np.float64(-12.593275741919133),

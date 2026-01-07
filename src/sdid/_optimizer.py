@@ -10,7 +10,8 @@ class Optimizer:
             negative_omega: bool,
             max_iter: int,
             tol: float,
-            sparse_threshold: float
+            sparse_threshold: float,
+            random_state: int
     ):
         # hyper param
         self.zeta_omega_type = zeta_omega_type
@@ -19,6 +20,9 @@ class Optimizer:
         self.max_iter = max_iter
         self.tol = tol
         self.sparse_threshold = sparse_threshold
+
+        # for generating random initial omega
+        self.rng = np.random.default_rng(random_state)
 
         # check hyper param
 
@@ -94,7 +98,8 @@ class Optimizer:
 
             # calculate penalty
             penalty = (zeta**2) * T_pre * np.sum(omega_co**2)
-
+            
+            # print(f"Loss: {loss:.4f}, Penalty: {penalty:.4f}")
             return loss + penalty
 
         # begin optimizing
@@ -108,7 +113,7 @@ class Optimizer:
                 bounds = [(None, None)] * N_co
             else:
                 bounds = [(0, None)] * N_co
-            x0 = np.ones(N_co) / N_co
+            x0 = self.rng.dirichlet(np.ones(N_co)*0.01)
 
         res = minimize(
             objective_omega,
@@ -126,11 +131,11 @@ class Optimizer:
         if self.sparse_threshold > 0:
             k = self.sparse_threshold
             if self.omega_type == "match": 
-                omegas = np.array([[w if w >= k/len(res.x) else 0.0 for w in res.x]])
+                omegas = np.array([[w if np.abs(w) >= k/len(res.x) else 0.0 for w in res.x]])
                 omegas = omegas / omegas.sum()
                 return omegas
             elif self.omega_type == "parallel":
-                omegas = np.array([w if w >= k/len(res.x[1:]) else 0.0 for w in res.x[1:]])
+                omegas = np.array([w if np.abs(w) >= k/len(res.x[1:]) else 0.0 for w in res.x[1:]])
                 omegas = omegas / omegas.sum()
                 return np.concatenate([[res.x[0]], omegas])
 

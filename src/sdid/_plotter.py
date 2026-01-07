@@ -51,3 +51,4 @@ class Plotter:
             ax.legend()
             ax.grid(True, alpha=0.3)
             plt.show()
+

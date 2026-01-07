@@ -27,7 +27,8 @@ class SyntheticDID:
         self._optimizer = Optimizer(
             zeta_omega_type=zeta_omega, omega_type=omega_type, negative_omega=negative_omega,
             max_iter=max_iter, tol=tol,
-            sparse_threshold=sparse_threshold
+            sparse_threshold=sparse_threshold,
+            random_state=random_state
         )
 
         # data
@@ -359,7 +360,7 @@ class SyntheticDID:
             **kwargs
         )
 
-    
+
     def _infer2summary(self, infer_dict):
         print("Synthetic Difference-in-Differences Estimations")
         print("-" * 65)
@@ -407,8 +408,15 @@ class SyntheticDID:
                 rep=rep
             )
         elif method == "jackknife":
-            raise ValueError("The indicated method is not supported (choose from [placebo, bootstrap]).")
+            if len(self.treated_units) < 2:
+                raise ValueError("Jackknife is supported only for data containing more than one treated unit. Please use method = bootstrap or placebo.")
+            infer_dict = self._inferer.jackknifing(
+                    ATT_twfe=self.ATT,
+                    data=self.data
+                )
         elif method == "placebo":
+            if 2*len(self.treated_units) >= len(self.wide_data.columns):
+                raise ValueError("There are more treated units than control units. Please use method = bootstrap or jackknife in this case.")
             infer_dict = self._inferer.placeboing(
                 raw_data=self._raw_data,
                 ATT_twfe=self.ATT,
@@ -424,7 +432,6 @@ class SyntheticDID:
             self._infer2summary(infer_dict=infer_dict)
 
         return infer_dict
-
 
 
 

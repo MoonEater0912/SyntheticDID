@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from tqdm.auto import tqdm
 import scipy.stats as stats
+from linearmodels.panel import PanelOLS
 
 class Inferer:
     def __init__(self, random_state=42):
@@ -169,13 +170,38 @@ class Inferer:
 
 
     def jackknifing(
-            self,
+            self, ATT_twfe,
             data,
-            ATT_twfe,
-            ATT_diff,
     ):
-        data = data.loc[data["sdid_weight"] > 0]
-        all_units = data["unit"].unique()
-        for u in all_units:
-            jack_dt = data[data["unit"] != u]
+        att_twfe = []
+
+        units = data["unit"].unique()
+
+        for u in tqdm(units, desc="jackknifing"):
+            jackked_data = data[data["unit"] != u]
+            df_for_reg = jackked_data.loc[jackked_data["sdid_weight"] > 0]
+            df_for_reg = df_for_reg.set_index(["unit","time"])
+
+            reg_model = PanelOLS(
+                df_for_reg["outcome"],
+                df_for_reg["treated"],
+                entity_effects = True, 
+                time_effects = True,
+                weights=df_for_reg["sdid_weight"],
+            ).fit()
+
+            att_twfe.append(reg_model.params.iloc[0])
+
+        se_twfe = np.std(att_twfe, ddof=0)
+        infered_twfe = self.vcoc(ATT_twfe, se_twfe)
+        return {
+            "ATT": infered_twfe
+        }
+
+
+
+
+
+
+
 

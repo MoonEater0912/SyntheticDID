@@ -1,6 +1,6 @@
 [project]
 name = "SyntheticDID"
-version = "0.1.5"
+version = "0.1.9"
 description = "A Synthetic Difference-in-Differences package for Python"
 dependencies = [
     "pandas>=2.0.0",
