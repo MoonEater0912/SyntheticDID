@@ -21,7 +21,7 @@ While other implementations in Python like `pysynthdid` exist, this package has 
 
 ### Next Step
 
-* Change the optimization algorithm: The $\omega$ optimization is currently implemented using SLSQP. However, when the treated unit's trajectory differs significantly from the control units, the algorithm often gets trapped at the initial values (e.g., uniform weights). While randomized initialization is used as an ad hoc fix, it lacks robustness. Frank-Wolfe (FW) algorithm should be more resilient to such "flat" loss surfaces.
+* Support for relaxation approach (forcing a more even estimation of omega)
 * Support for event studies (estimation of dynamic effects)
 * Support for staggered adoption
 
@@ -97,7 +97,7 @@ model = SDID(
     sparse_threshold=0      # non-negative float; if zero, it will be ignored
 )
 ```
-By default, the model implement the algorithm proposed in the original paper (automatically calculating zeta_omega based on an empirical formula). Set zeta_omega = "inf" and zeta_lambda = "inf" to degrade the model to a standard DID estimator ("inf" means the regularization penalty dominates the optimization, forcing the weights to be uniform). Set zeta_omega=0 and zeta_lambda to ignore the regularization penalty, making the units weights more sparse.  For falied optimazation, consider increasing max_iter and relaxing tol. The underlying optimization is powered by `scipy.optimize.minimize` (SLSQP).
+By default, the model implement the algorithm proposed in the original paper (automatically calculating zeta_omega based on an empirical formula). Set zeta_omega = "inf" and zeta_lambda = "inf" to degrade the model to a standard DID estimator ("inf" means the regularization penalty dominates the optimization, forcing the weights to be uniform). Set zeta_omega=0 and zeta_lambda to ignore the regularization penalty, making the units weights more sparse.  For falied optimazation, consider increasing max_iter and relaxing tol. The underlying optimization is Frank-Wolfe algorithm, except in case that negative omega is allowed, where the optimization is powered by `scipy.optimize.minimize` (SLSQP).
 
 Set omega_type="match" to degrade the model to a Synthetic Control estimator (getting rid of the intercept, i.e., $\omega_0$). However, when omega_type is set to 'match', the optimizer may fail to converge if the treatment group's characteristics lie outside the convex hull of the donor pool. In such scenarios, one might consider relaxing the non-negativity constraint to allow for negative unit weights (negative_omega = True). However, it is critical to note that this approach introduces the risk of arbitrary extrapolation, which may undermine the structural validity of the synthetic control.
 
