@@ -8,6 +8,7 @@ class Plotter:
 
     def trajectories(
             self, model, ax=None, show=True, time_weights=True,
+            figsize = (10, 6),
             xlabel = "Time",
             ylabel = "Outcome",
             title = "Synthetic Difference-in-Differences: Trajectories",
@@ -29,26 +30,27 @@ class Plotter:
         ax.plot(df['time'], df['treated'], **t_style)
 
 
+        ax.axvline(
+            x=np.min(list(model.post_treatment_terms)), 
+            color='gray', 
+            linestyle=':', 
+            label='Treatment Start',
+            alpha=0.8
+        )
+
+        if time_weights:
+            ax_weight = ax.twinx()
+            pre_treatment_periods = [t for t in model.wide_data.index if t not in model.post_treatment_terms]
+            ax_weight.bar(pre_treatment_periods, model.lambda_[1:], alpha=0.3, color='gray', label='Time Weights')
+            ax_weight.set_ylim(0, max(model.lambda_[1:]) * 8) 
+            ax_weight.set_ylabel('Time Weights ($\lambda$)')
+
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title(title)
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
         if show:
-            ax.axvline(
-                x=np.min(list(model.post_treatment_terms)), 
-                color='gray', 
-                linestyle=':', 
-                label='Treatment Start',
-                alpha=0.8
-            )
-
-            if time_weights:
-                ax_weight = ax.twinx()
-                pre_treatment_periods = [t for t in model.wide_data.index if t not in model.post_treatment_terms]
-                ax_weight.bar(pre_treatment_periods, model.lambda_[1:], alpha=0.3, color='gray', label='Time Weights')
-                ax_weight.set_ylim(0, max(model.lambda_[1:]) * 8) 
-                ax_weight.set_ylabel('Time Weights ($\lambda$)')
-
-            ax.set_xlabel(xlabel)
-            ax.set_ylabel(ylabel)
-            ax.set_title(title)
-            ax.legend()
-            ax.grid(True, alpha=0.3)
             plt.show()
 

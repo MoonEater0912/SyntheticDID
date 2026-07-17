@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from typing import List, Optional, Literal
 import matplotlib.pyplot as plt
+import math
 from linearmodels.panel import PanelOLS
 
 from sdid._optimizer import Optimizer
@@ -163,7 +164,7 @@ class SyntheticDID:
         
         if len(actual_treated_durations) > 0:
             if actual_treated_durations.nunique() != 1:
-                raise ValueError("Data contains staggered setup, please use sdid.model.SDIDEvent.")
+                raise ValueError("Data contains staggered setup, please use StaggeredSyntheticDID.")
             if (actual_treated_durations == expected_count).any():
                 raise ValueError("Units are treated from the very beginning (1st period), which is not allowed in SDID estimation.")
         else:
@@ -196,6 +197,10 @@ class SyntheticDID:
     @property
     def data(self):
         return self._data
+    
+    # ============================================================
+    # Below are functions that can be called only after fitted
+    # ============================================================
 
     @property
     def covariates(self):
@@ -204,7 +209,7 @@ class SyntheticDID:
 
     def _check_fitted(self):
         if self._is_fitted == False:
-            raise ValueError("The model is not fitted yet, or the last fitting failed.")
+            raise ValueError("The model is not fitted yet, or the recent fitting failed.")
 
     def _est_att_diff(self):
         T_post = len(self.post_treatment_terms)
@@ -285,10 +290,6 @@ class SyntheticDID:
         return self._att
 
 
-    # ============================================================
-    # Below are functions that can be called only after fitted
-    # ============================================================
-
     @property
     def zeta_omega(self):
         self._check_fitted()
@@ -346,6 +347,7 @@ class SyntheticDID:
 
     def plot_trajectories(
             self, ax=None, show=True, time_weights=True,
+            figsize = (10, 6),
             xlabel = "Time",
             ylabel = "Outcome",
             title = "Synthetic Difference-in-Differences: Trajectories",
@@ -354,6 +356,7 @@ class SyntheticDID:
 
         self._plotter.trajectories(
             self, ax=ax, show=show, time_weights=time_weights,
+            figsize= figsize,
             xlabel = xlabel,
             ylabel = ylabel,
             title = title,
@@ -435,3 +438,247 @@ class SyntheticDID:
 
 
 
+class StaggeredSyntheticDID:
+    def __init__(
+            self, 
+            zeta_omega="base", # ["base", "inf" float]
+            zeta_lambda=0,     # ["inf", float]
+            omega_type="parallel", # ["match", "parallel"]
+            negative_omega=False, # [True, False]
+            random_state=42,
+            max_iter=500,
+            tol=1e-5,
+            sparse_threshold: float = 0 # only controls the sparsity of omega 
+    ):
+        # single adoption estimater
+        self._single_adopter = SyntheticDID(
+            zeta_omega, zeta_lambda, omega_type, negative_omega,
+            random_state, max_iter, tol, sparse_threshold
+        )
+
+        # data
+        self._data = None               # total panel
+        self._adoption_times = None     # cohort periods
+        self._unit_adoption_map = None  # {unit: cohort}
+        self._cohorts = None            # list of sub-panels for each cohort 
+        self._treated_unit_nums = None  # lits of numbers of treatment units}
+
+        # estimater for each cohort
+        self._estimaters = {}           # {cohort: estimater}
+
+        # estimates
+        self._att = None
+        self._att_diff = None
+        self._atts = None
+        self._atts_diff = None
+
+
+    def fit(
+        self,
+        data: pd.DataFrame,
+        outcome_col: str,
+        unit_col: str,
+        time_col: str,
+        treated_col: str, 
+        covariate_cols: Optional[List[str]] = None,
+    ):
+        # flag
+        self._is_fitted = False
+
+        # check data and get adoption periods
+        variables = ["outcome", "unit", "time", "treated"]
+        if covariate_cols:
+            variables.extend(covariate_cols)
+        self._data = (
+            data
+            .rename(columns={
+                outcome_col: 'outcome',
+                unit_col: 'unit',
+                time_col: 'time',
+                treated_col: 'treated'
+            })
+            .copy()[variables]
+        )
+
+        self._check_panel()
+        self._split_panel()
+
+        # loop for single adoption estimating
+        for i in range(len(self._adoption_times)):
+            try:
+                cohort = self._adoption_times[i]
+                panel = self._cohorts[i]
+
+                estimater = self._single_adopter._clone
+                self._estimaters[cohort] = estimater.fit(
+                    panel, 
+                    "outcome", "unit", "time", "treated",
+                    covariate_cols
+                )
+            except Exception as e:
+                raise ValueError(f"An error occurs when fitting cohort {cohort}. Detailed message: {e}")
+        
+        # estimate att and att_diff
+        self._est_atts()
+        
+        self._is_fitted = True
+        return self
+
+
+
+        
+
+    def _check_panel(self):
+        if self.data.duplicated(subset=["unit", "time"]).any():
+            raise ValueError("Data contains duplicated observations (unit, year).")
+
+        period_counts = self.data.groupby("unit")["time"].nunique()
+        expected_count = self.data["time"].nunique()
+
+        if not (period_counts == expected_count).all():
+            raise ValueError("Data is not a balanced panel. Please make sure all units have same periods of observation.")
+        
+        if set(self.data["treated"].to_list()) != {0, 1}:
+            raise ValueError("Treatment status column contains values other than 0/1 or there's only one treatment status in the dataset.")
+
+        sorted_data = self._data.sort_values(['unit', 'time'])
+        treatment_times = (
+            sorted_data[sorted_data['treated'] == 1]
+            .groupby('unit')['time']
+            .min()
+        )
+        
+        unique_treatment_periods = sorted_data['time'].unique()
+        all_periods = sorted(unique_treatment_periods)
+        first_period = all_periods[0]
+        actual_treatment_periods = set(treatment_times.unique())
+
+        ## Below are checks in terms of the adoption times
+        # if the earliest adoption time is the first year
+        if first_period in actual_treatment_periods:
+            raise ValueError(f"The earliest adoption time should not be the very first period ({first_period})。")
+
+        # check if not staggered
+        if len(actual_treatment_periods) <= 1:
+            raise ValueError("The adoption is not staggered, please use SyntheticDID instead; or the dataset doesn't contain treated units.")
+
+        # check if there is control unit
+        total_units = self._data['unit'].nunique()
+        if len(treatment_times) == total_units:
+            raise ValueError("All units in the dataset are treated. The dataset should contain at least one control unit.")
+
+        self._adoption_times = sorted(list(actual_treatment_periods))
+        self._unit_adoption_map = treatment_times.to_dict()
+
+    def _split_panel(self) -> List[pd.DataFrame]:
+        all_units = set(self._data['unit'].unique())
+        treated_units = set(self._unit_adoption_map.keys())
+        never_treated_units = all_units - treated_units
+
+        sub_panels = []
+        treated_unit_nums = []
+
+        for t_treat in self._adoption_times:
+            current_treated_units = [
+                unit for unit, adopt_t in self._unit_adoption_map.items() 
+                if adopt_t == t_treat
+            ]
+            target_units = current_treated_units + list(never_treated_units)
+            
+            sub_panel = self._data[self._data['unit'].isin(target_units)].copy()
+            sub_panels.append(sub_panel)
+            treated_unit_nums.append(len(current_treated_units))
+        
+        if len(sub_panels) != len(self._adoption_times):
+            raise ValueError("Something happens ...")
+    
+        self._cohorts = sub_panels
+        self._treated_unit_nums = treated_unit_nums
+
+    def _est_atts(self):
+        self._atts = [
+            estimater.ATT for estimater in list(self._estimaters.values())
+        ]
+
+        self._atts_diff = [
+            estimater.ATT_diff for estimater in list(self._estimaters.values())
+        ]
+
+        self._att = np.average(self._atts, weights=self._treated_unit_nums)
+        self._att_diff = np.average(self._atts_diff, weights=self._treated_unit_nums)
+
+    @property
+    def data(self):
+        return self._data
+
+
+    # ============================================================
+    # Below are functions that can be called only after fitted
+    # ============================================================
+
+    def _check_fitted(self):
+        if self._is_fitted == False:
+            raise ValueError("The model is not fitted yet, or the recent fitting failed.")
+        
+    @property
+    def single_fits(self):
+        self._check_fitted()
+        return self._estimaters
+
+    @property
+    def ATT(self):
+        self._check_fitted()
+        return self._att
+    
+    @property
+    def ATT_diff(self):
+        self._check_fitted()
+        return self._att_diff
+
+    @property
+    def ATT_by_cohort(self):
+        self._check_fitted()
+        return self._atts
+    
+    @property
+    def ATT_diff_by_cohort(self):
+        self._check_fitted()
+        return self._atts_diff
+
+
+    def plot_all_trajectories(
+        self, ax=None, time_weights=True,
+        figsize = (6, 4),
+        xlabel = "Time",
+        ylabel = "Outcome",
+        title = "Staggered Synthetic Difference-in-Differences: Trajectories",
+        ncols:int = 3,
+        **kwargs
+    ):
+        self._check_fitted()
+
+        nrows = int(np.ceil(len(self._adoption_times) / ncols))
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(6*ncols, 4*nrows))
+        axes_flat = axes.flatten()
+
+        for i, (cohort, model) in enumerate(self._estimaters.items()):
+            ax = axes_flat[i]
+            model.plot_trajectories(
+                ax=ax, show=False, time_weights=time_weights,
+                figsize=figsize, 
+                xlabel=xlabel, ylabel=ylabel, 
+                title=f"Cohort {cohort}", 
+                **kwargs
+            )
+        
+        for j in range(len(self._adoption_times), len(axes_flat)):
+            fig.delaxes(axes_flat[j])
+        
+        fig.suptitle(title)
+        plt.tight_layout()
+        plt.show()
+
+
+
+
+    

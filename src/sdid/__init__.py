@@ -1,4 +1,4 @@
-from .model import SyntheticDID
+from .model import SyntheticDID, StaggeredSyntheticDID
 from importlib.metadata import version, PackageNotFoundError
 
 try:

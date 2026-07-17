@@ -11,19 +11,19 @@
 While other implementations in Python like `pysynthdid` exist, this package has (aims to have) several advantages:
 
 * **Time-Varying Covariates**: Support for including dynamic controls in estimation.
+* **Support for Staggered Adoption** (multiple treatment timing).
 * **More Robust ATT Estimation**: Uses the weighted two-way fixed-effect regression to estimate the Average Treatment Effect on the Treated (ATT), while also keeping the ATT estimated by diff-in-diff. 
 *  **More Accurate Inference**: Fixes bugs existing in other previous implementations.
 * **Relaxed Dependencies**: Updated to be compatible with the latest Python data science stack.
 * **Other Features (under construction)**: 
+    * Added more modern variants of SDID.
     * Enhanced support for **Event Studies**.
-    * Support for **Staggered Adoption** (multiple treatment timing).
 
 
 ### Next Step
 
 * Support for relaxation approach (forcing a more even estimation of omega)
 * Support for event studies (estimation of dynamic effects)
-* Support for staggered adoption
 
 
 ### References & Resources
@@ -53,7 +53,7 @@ pip install git+https://github.com/MoonEater0912/SyntheticDID.git
 ```
 
 
-## Quick Start
+## Quick Start (Single Adoption)
 
 ### Model Setup
 
@@ -61,7 +61,6 @@ To get started, your data frame should contain at least four columns: 'unit', 't
 
 You can also specify covariates when fitting the model. The way the package controls for covariates is described in this [working paper](https://github.com/skranz/xsynthdid/blob/main/paper/synthdid_with_covariates.pdf).
 
-Currently, this package only supports same-time adoption.
 
 ```python
 import pandas as pd
@@ -176,3 +175,55 @@ This will return a dictionary, storing the estimate, standard error, z-score, p-
   'z_value': np.float64(-6.514903267361),
   'p_value': np.float64(7.273648350292206e-11)}}
 ```
+
+
+## Quick Start (Staggered Adoption)
+
+### Model Setup
+
+To get started with the estimation in staggered adoption scenario, similarly, your data frame should contain at least four columns: 'unit', 'time', 'outcome' and 'treated indicator'. You can specify the column names when fitting the model. The treatment should be absorbed and balanced. You can also specify covariates when fitting the model.
+
+This time, we are gonna use `StaggeredSyntheticDID`, instead of `SyntheticDID`.
+
+```python
+import pandas as pd
+from sdid import StaggeredSyntheticDID as SSDID
+
+dt = pd.read_csv("your_data.csv")
+
+model = SSDID().fit(
+    dt,
+    unit="unit",
+    time="time",
+    outcome="outcome",
+    treated="treated",
+    covariates=["x1", "x2"]
+) # default setting
+```
+
+The parameters you can specity in `SSDID()` are actually the same with those in `SyntheticDID` (this is because the estimation in staggered scenario is implemented by applying `SyntheticDID` repeatedly.). Therefore, you can still make estimation with tradition Synthetic Control or Differences-in-Differences by specifying different `zeta_omega`, `omega_type`, and `zeta_lambda`.
+
+Once fitted, you can see both the overall ATT and the ATTs by cohort (by adoption time):
+
+```python
+print(model.ATT)
+print(model.ATT_diff)
+
+print(model.ATT_by_cohort)
+print(model.ATT_diff_by_cohort)
+```
+
+You can actually directly access the models fitted for each cohort, so that you can check whatever parameters or make whatever plots you'd like. In the returned dictionary, the keys are cohorts, and the values are models (instances of class `SyntheticDID`).
+
+```python
+models = model.single_fits # this will return a dictionary like {cohort: model}
+```
+
+There is a built-in method for visualizing trajectories for all cohorts at once, so that you can always quickly take a look at what happened:
+
+```python
+# figsize - size of one subplot in the fig; 
+# ncols - number of columns in the fig
+model.plot_all_trajectories(figsize=(6,4), ncols=3)
+```
+
